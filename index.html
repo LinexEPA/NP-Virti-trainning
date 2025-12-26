@@ -168,11 +168,10 @@
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
     import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 
-    // V3.2 更新：已加入 databaseURL
+    // ★★★ 你的 Firebase 設定 (已包含 DatabaseURL) ★★★
     const firebaseConfig = {
         apiKey: "AIzaSyDdoji343owSU3lufOUVMLPaAL5phmOoYE",
         authDomain: "np-virti-booking-platform.firebaseapp.com",
-        // 注意：這行就是之前缺少的關鍵！
         databaseURL: "https://np-virti-booking-platform-default-rtdb.firebaseio.com",
         projectId: "np-virti-booking-platform",
         storageBucket: "np-virti-booking-platform.firebasestorage.app",
@@ -189,9 +188,9 @@
     const slotsContainer = document.getElementById('slotsContainer');
     const statusText = document.getElementById('connectionStatus');
     
-    // 定義時段
+    // ★★★ 修改處：產生 12 個時段 (00:00 到 22:00) ★★★
     const timeSlots = [];
-    for (let i = 8; i <= 22; i += 2) {
+    for (let i = 0; i <= 22; i += 2) {
         timeSlots.push(i.toString().padStart(2, '0') + ":00");
     }
 
@@ -229,8 +228,7 @@
             renderSlots(data);
         }, (error) => {
             console.error(error);
-            // 如果連線失敗，通常是因為網址區域不對，這裡做一個自動切換提示
-            statusText.textContent = "連線失敗，請檢查資料庫區域設定";
+            statusText.textContent = "連線失敗，請檢查網路或權限";
             slotsContainer.innerHTML = '<p style="color:red; text-align:center;">無法連線至資料庫</p>';
         });
     }
@@ -243,9 +241,12 @@
             btn.className = 'time-btn';
             btn.textContent = time;
 
+            // 檢查該時段是否有資料 (只要有資料就視為已預約)
             if (bookedData[time]) {
                 btn.disabled = true;
-                btn.title = "已被其他學員預約";
+                // 如果有存名字，這裡可以顯示出來 (選用)
+                // btn.textContent += ` (${bookedData[time].name})`; 
+                btn.title = "已被預約";
             } else {
                 btn.onclick = () => handleBooking(time);
             }
@@ -253,12 +254,31 @@
         });
     }
 
+    // ★★★ 關鍵修改：預約並寫入姓名 ★★★
     window.handleBooking = function(time) {
-        set(ref(db, 'bookings/' + currentDateStr + '/' + time), true)
+        // 1. 跳出瀏覽器內建輸入框詢問姓名
+        const studentName = prompt(`您選擇預約 ${time} 時段\n請輸入您的學員姓名：`);
+
+        // 2. 檢查使用者是否有輸入 (如果按取消或留白，則不執行預約)
+        if (!studentName || studentName.trim() === "") {
+            alert("必須輸入姓名才能進行預約喔！");
+            return;
+        }
+
+        // 3. 準備要寫入資料庫的物件 (包含狀態和姓名)
+        const bookingData = {
+            status: "booked",
+            name: studentName.trim() // 這裡對應你的 name 欄位
+        };
+
+        // 4. 寫入 Firebase
+        set(ref(db, 'bookings/' + currentDateStr + '/' + time), bookingData)
             .then(() => {
                 const modal = document.getElementById('successModal');
                 const messageBox = document.getElementById('modalMessage');
-                messageBox.innerHTML = `謝謝您為病人努力學習<br><strong>${time}</strong> 等您上線`;
+                
+                // 顯示成功訊息 (包含輸入的名字)
+                messageBox.innerHTML = `預約成功！<br>學員：<strong>${studentName}</strong><br><strong>${time}</strong> 等您上線`;
                 modal.style.display = 'flex';
             })
             .catch((error) => {
