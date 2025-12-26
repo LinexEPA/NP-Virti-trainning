@@ -31,11 +31,11 @@
         .header {
             background-color: var(--primary-blue);
             color: var(--header-text);
-            padding: 15px 15px; /* 稍微縮小左右間距以容納長標題 */
+            padding: 15px 15px;
             display: flex;
             align-items: center;
             justify-content: space-between;
-            font-size: 1.1rem; /* 稍微縮小字體以容納長標題 */
+            font-size: 1.1rem;
             font-weight: bold;
         }
         .date-section {
@@ -47,11 +47,23 @@
             display: flex;
             align-items: center;
             border: 1px solid var(--primary-blue);
+            border-radius: 5px;
             padding: 5px 10px;
             width: fit-content;
             background: #fff;
+            position: relative;
         }
-        .date-display { font-size: 1rem; color: var(--text-dark); border: none; outline: none; }
+        /* 修改日期輸入框樣式，讓它更好點選 */
+        .date-input {
+            font-size: 1.1rem;
+            color: var(--text-dark);
+            border: none;
+            outline: none;
+            background: transparent;
+            font-family: "Microsoft JhengHei";
+            cursor: pointer;
+        }
+        
         .slots-grid {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
@@ -131,16 +143,15 @@
 
     <div class="date-section">
         <div class="date-input-wrapper">
-            <span class="date-display" id="currentDate">2025/12/26</span>
-            <i class="fas fa-calendar-alt" style="margin-left: 10px; color: #555;"></i>
+            <input type="date" id="datePicker" class="date-input">
         </div>
         <div style="margin-top: 10px; font-size: 0.9rem; color: #666;">
-            請選擇練習時段 (即時連線版)
+            請點選上方日期以切換不同天的課表
         </div>
     </div>
 
     <div class="slots-grid" id="slotsContainer">
-        <p style="grid-column: 1/-1; text-align: center; color: #666;">正在連線資料庫...</p>
+        <p style="grid-column: 1/-1; text-align: center; color: #666;">正在讀取資料...</p>
     </div>
     
     <div class="status-bar" id="connectionStatus">連線中...</div>
@@ -158,9 +169,8 @@
 
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-    import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+    import { getDatabase, ref, set, onValue, off } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 
-    // 你的 Firebase 設定
     const firebaseConfig = {
         apiKey: "AIzaSyDdoji343owSU3lufOUVMLPaAL5phmOoYE",
         authDomain: "np-virti-booking-platform.firebaseapp.com",
@@ -174,28 +184,53 @@
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
 
-    // 設定日期
-    const targetDate = "2025-12-26"; 
-    document.getElementById('currentDate').textContent = targetDate.replace(/-/g, '/');
-
+    const datePicker = document.getElementById('datePicker');
     const slotsContainer = document.getElementById('slotsContainer');
     const statusText = document.getElementById('connectionStatus');
+    
+    // 設定預設日期為「今天」
+    const today = new Date().toISOString().split('T')[0];
+    datePicker.value = today;
+
+    // 儲存目前的監聽器，以便切換日期時移除舊的
+    let currentDateStr = today;
+    let unsubscribe = null;
+
+    // 啟動程式
+    loadDataForDate(today);
+
+    // 當使用者改變日期時
+    datePicker.addEventListener('change', (e) => {
+        loadDataForDate(e.target.value);
+    });
+
+    function loadDataForDate(dateStr) {
+        currentDateStr = dateStr;
+        statusText.textContent = "切換日期中...";
+        slotsContainer.innerHTML = '<p style="grid-column: 1/-1; text-align: center; color: #666;">資料載入中...</p>';
+
+        // 移除舊日期的監聽 (如果有的話)
+        if (unsubscribe) {
+            // 在 Firebase v9，onValue 回傳的就是取消函式
+            unsubscribe();
+        }
+
+        // 建立新日期的監聽
+        const bookingsRef = ref(db, 'bookings/' + dateStr);
+        
+        unsubscribe = onValue(bookingsRef, (snapshot) => {
+            const data = snapshot.val() || {}; 
+            statusText.textContent = `已顯示 ${dateStr} 的預約狀況`;
+            renderSlots(data);
+        }, (error) => {
+            statusText.textContent = "連線失敗";
+        });
+    }
 
     const timeSlots = [];
     for (let i = 8; i <= 22; i += 2) {
         timeSlots.push(i.toString().padStart(2, '0') + ":00");
     }
-
-    const bookingsRef = ref(db, 'bookings/' + targetDate);
-    
-    onValue(bookingsRef, (snapshot) => {
-        const data = snapshot.val() || {}; 
-        statusText.textContent = "已連線至雲端系統";
-        renderSlots(data);
-    }, (error) => {
-        statusText.textContent = "連線失敗: " + error.message;
-        console.error(error);
-    });
 
     function renderSlots(bookedData) {
         slotsContainer.innerHTML = ''; 
@@ -216,7 +251,8 @@
     }
 
     window.handleBooking = function(time) {
-        set(ref(db, 'bookings/' + targetDate + '/' + time), true)
+        // 寫入當前選擇的日期
+        set(ref(db, 'bookings/' + currentDateStr + '/' + time), true)
             .then(() => {
                 const modal = document.getElementById('successModal');
                 const messageBox = document.getElementById('modalMessage');
@@ -224,7 +260,7 @@
                 modal.style.display = 'flex';
             })
             .catch((error) => {
-                alert("預約失敗，請檢查網路或是資料庫權限\n" + error.message);
+                alert("預約失敗: " + error.message);
             });
     };
 </script>
