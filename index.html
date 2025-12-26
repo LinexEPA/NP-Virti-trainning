@@ -168,9 +168,12 @@
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
     import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 
+    // V3.2 更新：已加入 databaseURL
     const firebaseConfig = {
         apiKey: "AIzaSyDdoji343owSU3lufOUVMLPaAL5phmOoYE",
         authDomain: "np-virti-booking-platform.firebaseapp.com",
+        // 注意：這行就是之前缺少的關鍵！
+        databaseURL: "https://np-virti-booking-platform-default-rtdb.firebaseio.com",
         projectId: "np-virti-booking-platform",
         storageBucket: "np-virti-booking-platform.firebasestorage.app",
         messagingSenderId: "727691453760",
@@ -178,6 +181,7 @@
         measurementId: "G-5N4970Y5F4"
     };
 
+    // 初始化 Firebase
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
 
@@ -185,13 +189,13 @@
     const slotsContainer = document.getElementById('slotsContainer');
     const statusText = document.getElementById('connectionStatus');
     
-    // 修正：先定義時間按鈕清單，再執行其他程式
+    // 定義時段
     const timeSlots = [];
     for (let i = 8; i <= 22; i += 2) {
         timeSlots.push(i.toString().padStart(2, '0') + ":00");
     }
 
-    // 設定預設日期為「今天」
+    // 設定預設日期為今天
     const today = new Date().toISOString().split('T')[0];
     datePicker.value = today;
 
@@ -201,7 +205,7 @@
     // 啟動程式
     loadDataForDate(today);
 
-    // 當使用者改變日期時
+    // 監聽日期變更
     datePicker.addEventListener('change', (e) => {
         if(e.target.value) {
             loadDataForDate(e.target.value);
@@ -210,10 +214,9 @@
 
     function loadDataForDate(dateStr) {
         currentDateStr = dateStr;
-        statusText.textContent = "切換日期中...";
+        statusText.textContent = "資料讀取中...";
         slotsContainer.innerHTML = '<p style="grid-column: 1/-1; text-align: center; color: #666;">資料載入中...</p>';
 
-        // 移除舊日期的監聽
         if (unsubscribe) {
             unsubscribe();
         }
@@ -225,8 +228,10 @@
             statusText.textContent = `顯示日期：${dateStr}`;
             renderSlots(data);
         }, (error) => {
-            statusText.textContent = "連線失敗";
-            slotsContainer.innerHTML = '<p style="color:red; text-align:center;">讀取失敗，請檢查網路</p>';
+            console.error(error);
+            // 如果連線失敗，通常是因為網址區域不對，這裡做一個自動切換提示
+            statusText.textContent = "連線失敗，請檢查資料庫區域設定";
+            slotsContainer.innerHTML = '<p style="color:red; text-align:center;">無法連線至資料庫</p>';
         });
     }
 
@@ -249,7 +254,6 @@
     }
 
     window.handleBooking = function(time) {
-        // 寫入當前選擇的日期
         set(ref(db, 'bookings/' + currentDateStr + '/' + time), true)
             .then(() => {
                 const modal = document.getElementById('successModal');
