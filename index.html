@@ -51,9 +51,7 @@
             padding: 5px 10px;
             width: fit-content;
             background: #fff;
-            position: relative;
         }
-        /* 修改日期輸入框樣式，讓它更好點選 */
         .date-input {
             font-size: 1.1rem;
             color: var(--text-dark);
@@ -63,7 +61,6 @@
             font-family: "Microsoft JhengHei";
             cursor: pointer;
         }
-        
         .slots-grid {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
@@ -151,10 +148,10 @@
     </div>
 
     <div class="slots-grid" id="slotsContainer">
-        <p style="grid-column: 1/-1; text-align: center; color: #666;">正在讀取資料...</p>
+        <p style="grid-column: 1/-1; text-align: center; color: #666;">初始化中...</p>
     </div>
     
-    <div class="status-bar" id="connectionStatus">連線中...</div>
+    <div class="status-bar" id="connectionStatus">準備連線...</div>
 </div>
 
 <div class="modal" id="successModal">
@@ -169,7 +166,7 @@
 
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-    import { getDatabase, ref, set, onValue, off } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+    import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 
     const firebaseConfig = {
         apiKey: "AIzaSyDdoji343owSU3lufOUVMLPaAL5phmOoYE",
@@ -188,11 +185,16 @@
     const slotsContainer = document.getElementById('slotsContainer');
     const statusText = document.getElementById('connectionStatus');
     
+    // 修正：先定義時間按鈕清單，再執行其他程式
+    const timeSlots = [];
+    for (let i = 8; i <= 22; i += 2) {
+        timeSlots.push(i.toString().padStart(2, '0') + ":00");
+    }
+
     // 設定預設日期為「今天」
     const today = new Date().toISOString().split('T')[0];
     datePicker.value = today;
 
-    // 儲存目前的監聽器，以便切換日期時移除舊的
     let currentDateStr = today;
     let unsubscribe = null;
 
@@ -201,7 +203,9 @@
 
     // 當使用者改變日期時
     datePicker.addEventListener('change', (e) => {
-        loadDataForDate(e.target.value);
+        if(e.target.value) {
+            loadDataForDate(e.target.value);
+        }
     });
 
     function loadDataForDate(dateStr) {
@@ -209,27 +213,21 @@
         statusText.textContent = "切換日期中...";
         slotsContainer.innerHTML = '<p style="grid-column: 1/-1; text-align: center; color: #666;">資料載入中...</p>';
 
-        // 移除舊日期的監聽 (如果有的話)
+        // 移除舊日期的監聽
         if (unsubscribe) {
-            // 在 Firebase v9，onValue 回傳的就是取消函式
             unsubscribe();
         }
 
-        // 建立新日期的監聽
         const bookingsRef = ref(db, 'bookings/' + dateStr);
         
         unsubscribe = onValue(bookingsRef, (snapshot) => {
             const data = snapshot.val() || {}; 
-            statusText.textContent = `已顯示 ${dateStr} 的預約狀況`;
+            statusText.textContent = `顯示日期：${dateStr}`;
             renderSlots(data);
         }, (error) => {
             statusText.textContent = "連線失敗";
+            slotsContainer.innerHTML = '<p style="color:red; text-align:center;">讀取失敗，請檢查網路</p>';
         });
-    }
-
-    const timeSlots = [];
-    for (let i = 8; i <= 22; i += 2) {
-        timeSlots.push(i.toString().padStart(2, '0') + ":00");
     }
 
     function renderSlots(bookedData) {
