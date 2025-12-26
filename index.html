@@ -191,9 +191,9 @@
     // ★★★ 修改處：產生 12 個時段 (00:00 到 22:00) ★★★
     const timeSlots = [];
     for (let i = 0; i <= 22; i += 2) {
-        timeSlots.push(i.toString().padStart(2, '0') + ":00");
+   for (let i = 0; i <= 22; i += 2) {
+    timeSlots.push(i.toString().padStart(2, '0') + ":00");
     }
-
     // 設定預設日期為今天
     const today = new Date().toISOString().split('T')[0];
     datePicker.value = today;
