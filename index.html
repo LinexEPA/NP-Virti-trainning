@@ -90,6 +90,7 @@
             cursor: not-allowed;
             text-decoration: line-through;
         }
+        /* 通用視窗樣式 */
         .modal {
             display: none;
             position: fixed;
@@ -108,6 +109,7 @@
             border-radius: 10px;
             text-align: center;
             max-width: 80%;
+            width: 300px;
             box-shadow: 0 5px 15px rgba(0,0,0,0.3);
             border-top: 5px solid var(--primary-blue);
         }
@@ -154,6 +156,24 @@
     <div class="status-bar" id="connectionStatus">準備連線...</div>
 </div>
 
+<div class="modal" id="bookingModal">
+    <div class="modal-content">
+        <h3 style="color: #0056b3; margin-top: 0;">預約確認</h3>
+        <p>您選擇的時段：<br><span id="bookingTimeDisplay" style="font-weight: bold; font-size: 1.5rem; color: #333;"></span></p>
+        
+        <div style="margin: 20px 0; text-align: left;">
+            <label for="studentNameInput" style="display: block; margin-bottom: 8px; font-weight: bold; color: #555;">請輸入您的學員姓名：</label>
+            <input type="text" id="studentNameInput" placeholder="例如：王小明" 
+                   style="width: 100%; padding: 10px; font-size: 1rem; border: 1px solid #ccc; border-radius: 5px; box-sizing: border-box;">
+        </div>
+
+        <div style="display: flex; gap: 10px; justify-content: center;">
+            <button class="modal-btn" style="background-color: #6c757d; margin-top: 0;" onclick="window.closeBookingModal()">取消</button>
+            <button class="modal-btn" style="margin-top: 0;" onclick="window.confirmBooking()">確認預約</button>
+        </div>
+    </div>
+</div>
+
 <div class="modal" id="successModal">
     <div class="modal-content">
         <div style="font-size: 3rem; color: #28a745; margin-bottom: 15px;">
@@ -168,7 +188,7 @@
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
     import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 
-    // ★★★ 你的 Firebase 設定 (已包含 DatabaseURL) ★★★
+    // 使用你提供的 Firebase 設定
     const firebaseConfig = {
         apiKey: "AIzaSyDdoji343owSU3lufOUVMLPaAL5phmOoYE",
         authDomain: "np-virti-booking-platform.firebaseapp.com",
@@ -188,18 +208,19 @@
     const slotsContainer = document.getElementById('slotsContainer');
     const statusText = document.getElementById('connectionStatus');
     
-    // ★★★ 修改處：產生 12 個時段 (00:00 到 22:00) ★★★
+    // 產生 12 個時段 (00:00 到 22:00)
     const timeSlots = [];
     for (let i = 0; i <= 22; i += 2) {
-   for (let i = 0; i <= 22; i += 2) {
-    timeSlots.push(i.toString().padStart(2, '0') + ":00");
+        timeSlots.push(i.toString().padStart(2, '0') + ":00");
     }
+
     // 設定預設日期為今天
     const today = new Date().toISOString().split('T')[0];
     datePicker.value = today;
 
     let currentDateStr = today;
     let unsubscribe = null;
+    let currentSelectedTime = ''; // 暫存使用者選的時間
 
     // 啟動程式
     loadDataForDate(today);
@@ -228,7 +249,7 @@
             renderSlots(data);
         }, (error) => {
             console.error(error);
-            statusText.textContent = "連線失敗，請檢查網路或權限";
+            statusText.textContent = "連線失敗";
             slotsContainer.innerHTML = '<p style="color:red; text-align:center;">無法連線至資料庫</p>';
         });
     }
@@ -241,50 +262,80 @@
             btn.className = 'time-btn';
             btn.textContent = time;
 
-            // 檢查該時段是否有資料 (只要有資料就視為已預約)
             if (bookedData[time]) {
                 btn.disabled = true;
-                // 如果有存名字，這裡可以顯示出來 (選用)
-                // btn.textContent += ` (${bookedData[time].name})`; 
                 btn.title = "已被預約";
+                // 若要顯示是誰預約的，可以加上這行：
+                // btn.textContent += ` (${bookedData[time].name})`;
             } else {
-                btn.onclick = () => handleBooking(time);
+                // 綁定點擊事件，開啟輸入視窗
+                btn.onclick = () => window.openBookingModal(time);
             }
             slotsContainer.appendChild(btn);
         });
     }
 
-    // ★★★ 關鍵修改：預約並寫入姓名 ★★★
-    window.handleBooking = function(time) {
-        // 1. 跳出瀏覽器內建輸入框詢問姓名
-        const studentName = prompt(`您選擇預約 ${time} 時段\n請輸入您的學員姓名：`);
+    // --- 以下為視窗控制與預約邏輯 ---
 
-        // 2. 檢查使用者是否有輸入 (如果按取消或留白，則不執行預約)
-        if (!studentName || studentName.trim() === "") {
-            alert("必須輸入姓名才能進行預約喔！");
+    // 開啟預約視窗
+    window.openBookingModal = function(time) {
+        currentSelectedTime = time;
+        document.getElementById('bookingTimeDisplay').textContent = time;
+        document.getElementById('studentNameInput').value = ''; // 清空欄位
+        document.getElementById('bookingModal').style.display = 'flex';
+        // 自動將游標移到輸入框
+        setTimeout(() => document.getElementById('studentNameInput').focus(), 100);
+    };
+
+    // 關閉預約視窗
+    window.closeBookingModal = function() {
+        document.getElementById('bookingModal').style.display = 'none';
+    };
+
+    // 確認預約 (按下視窗裡的確認按鈕後執行)
+    window.confirmBooking = function() {
+        const nameInput = document.getElementById('studentNameInput');
+        const studentName = nameInput.value.trim();
+
+        if (!studentName) {
+            alert("請輸入姓名才能預約喔！");
             return;
         }
 
-        // 3. 準備要寫入資料庫的物件 (包含狀態和姓名)
+        // 準備要寫入的資料
         const bookingData = {
             status: "booked",
-            name: studentName.trim() // 這裡對應你的 name 欄位
+            name: studentName
         };
 
-        // 4. 寫入 Firebase
-        set(ref(db, 'bookings/' + currentDateStr + '/' + time), bookingData)
+        // 寫入 Firebase
+        set(ref(db, 'bookings/' + currentDateStr + '/' + currentSelectedTime), bookingData)
             .then(() => {
-                const modal = document.getElementById('successModal');
-                const messageBox = document.getElementById('modalMessage');
+                // 1. 關閉輸入視窗
+                window.closeBookingModal();
                 
-                // 顯示成功訊息 (包含輸入的名字)
-                messageBox.innerHTML = `預約成功！<br>學員：<strong>${studentName}</strong><br><strong>${time}</strong> 等您上線`;
-                modal.style.display = 'flex';
+                // 2. 顯示成功視窗
+                const successModal = document.getElementById('successModal');
+                const messageBox = document.getElementById('modalMessage');
+                messageBox.innerHTML = `預約成功！<br>學員：<strong>${studentName}</strong><br><strong>${currentSelectedTime}</strong> 等您上線`;
+                successModal.style.display = 'flex';
             })
             .catch((error) => {
                 alert("預約失敗: " + error.message);
             });
     };
+    
+    // 點擊視窗外部也可以關閉
+    window.onclick = function(event) {
+        const modal1 = document.getElementById('bookingModal');
+        const modal2 = document.getElementById('successModal');
+        if (event.target == modal1) {
+            modal1.style.display = 'none';
+        }
+        if (event.target == modal2) {
+            modal2.style.display = 'none';
+        }
+    }
 </script>
 
 </body>
