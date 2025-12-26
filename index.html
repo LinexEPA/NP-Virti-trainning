@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>器械點班查詢 - 學習預約系統</title>
+    <title>專科護理師-虛擬人問診練習預約平台</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
         :root {
@@ -13,7 +13,6 @@
             --disabled-gray: #cccccc;
             --text-dark: #333333;
         }
-
         body {
             font-family: "Microsoft JhengHei", Arial, sans-serif;
             margin: 0;
@@ -22,7 +21,6 @@
             display: flex;
             justify-content: center;
         }
-
         .container {
             width: 100%;
             max-width: 480px;
@@ -30,26 +28,21 @@
             min-height: 100vh;
             box-shadow: 0 0 10px rgba(0,0,0,0.1);
         }
-
         .header {
             background-color: var(--primary-blue);
             color: var(--header-text);
-            padding: 15px 20px;
+            padding: 15px 15px; /* 稍微縮小左右間距以容納長標題 */
             display: flex;
             align-items: center;
             justify-content: space-between;
-            font-size: 1.2rem;
+            font-size: 1.1rem; /* 稍微縮小字體以容納長標題 */
             font-weight: bold;
         }
-
-        .header i { cursor: pointer; font-size: 1.4rem; }
-
         .date-section {
             padding: 15px 20px;
             border-bottom: 1px solid #eee;
             background-image: linear-gradient(to bottom, #fff, #f9fbff);
         }
-
         .date-input-wrapper {
             display: flex;
             align-items: center;
@@ -58,21 +51,13 @@
             width: fit-content;
             background: #fff;
         }
-
-        .date-display {
-            font-size: 1rem;
-            color: var(--text-dark);
-            border: none;
-            outline: none;
-        }
-
+        .date-display { font-size: 1rem; color: var(--text-dark); border: none; outline: none; }
         .slots-grid {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
             gap: 15px;
             padding: 20px;
         }
-
         .time-btn {
             background-color: #fff;
             border: 1px solid var(--primary-blue);
@@ -84,13 +69,11 @@
             transition: all 0.2s;
             font-weight: bold;
         }
-
         .time-btn:hover:not(:disabled) {
             background-color: #e6f0ff;
             transform: translateY(-2px);
             box-shadow: 0 2px 5px rgba(0,0,0,0.1);
         }
-
         .time-btn:disabled {
             background-color: var(--disabled-gray);
             border-color: var(--disabled-gray);
@@ -98,7 +81,6 @@
             cursor: not-allowed;
             text-decoration: line-through;
         }
-
         .modal {
             display: none;
             position: fixed;
@@ -111,7 +93,6 @@
             align-items: center;
             z-index: 1000;
         }
-
         .modal-content {
             background-color: #fff;
             padding: 30px;
@@ -121,14 +102,6 @@
             box-shadow: 0 5px 15px rgba(0,0,0,0.3);
             border-top: 5px solid var(--primary-blue);
         }
-
-        .modal-text {
-            font-size: 1.1rem;
-            line-height: 1.6;
-            margin-bottom: 20px;
-            color: var(--text-dark);
-        }
-
         .modal-btn {
             background-color: var(--primary-blue);
             color: white;
@@ -137,19 +110,13 @@
             border-radius: 5px;
             cursor: pointer;
             font-size: 1rem;
+            margin-top: 15px;
         }
-
-        .reset-btn-container {
+        .status-bar {
             text-align: center;
-            margin-top: 20px;
-            padding-bottom: 20px;
-        }
-        
-        .reset-link {
-            color: #999;
             font-size: 0.8rem;
-            text-decoration: underline;
-            cursor: pointer;
+            color: #888;
+            padding: 5px;
         }
     </style>
 </head>
@@ -158,7 +125,7 @@
 <div class="container">
     <div class="header">
         <i class="fas fa-home"></i>
-        <span>器械點班查詢</span>
+        <span>專科護理師-虛擬人問診練習預約平台</span>
         <i class="fas fa-chevron-left"></i>
     </div>
 
@@ -168,15 +135,15 @@
             <i class="fas fa-calendar-alt" style="margin-left: 10px; color: #555;"></i>
         </div>
         <div style="margin-top: 10px; font-size: 0.9rem; color: #666;">
-            請選擇練習時段 (單一學員制)
+            請選擇練習時段 (即時連線版)
         </div>
     </div>
 
-    <div class="slots-grid" id="slotsContainer"></div>
-
-    <div class="reset-btn-container">
-        <span class="reset-link" onclick="resetData()">[開發者測試用] 重置所有預約</span>
+    <div class="slots-grid" id="slotsContainer">
+        <p style="grid-column: 1/-1; text-align: center; color: #666;">正在連線資料庫...</p>
     </div>
+    
+    <div class="status-bar" id="connectionStatus">連線中...</div>
 </div>
 
 <div class="modal" id="successModal">
@@ -184,38 +151,63 @@
         <div style="font-size: 3rem; color: #28a745; margin-bottom: 15px;">
             <i class="fas fa-check-circle"></i>
         </div>
-        <div class="modal-text" id="modalMessage"></div>
-        <button class="modal-btn" onclick="closeModal()">確定</button>
+        <div class="modal-text" id="modalMessage" style="font-size: 1.1rem; line-height: 1.6; color: #333;"></div>
+        <button class="modal-btn" onclick="document.getElementById('successModal').style.display='none'">確定</button>
     </div>
 </div>
 
-<script>
-    const timeSlots = [];
-    for (let i = 8; i <= 22; i += 2) {
-        const timeString = i.toString().padStart(2, '0') + ":00";
-        timeSlots.push(timeString);
-    }
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+    import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+
+    // 你的 Firebase 設定
+    const firebaseConfig = {
+        apiKey: "AIzaSyDdoji343owSU3lufOUVMLPaAL5phmOoYE",
+        authDomain: "np-virti-booking-platform.firebaseapp.com",
+        projectId: "np-virti-booking-platform",
+        storageBucket: "np-virti-booking-platform.firebasestorage.app",
+        messagingSenderId: "727691453760",
+        appId: "1:727691453760:web:86a3346c5eb5e29a88c6a5",
+        measurementId: "G-5N4970Y5F4"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    // 設定日期
+    const targetDate = "2025-12-26"; 
+    document.getElementById('currentDate').textContent = targetDate.replace(/-/g, '/');
 
     const slotsContainer = document.getElementById('slotsContainer');
-    const STORAGE_KEY = 'medical_training_bookings';
+    const statusText = document.getElementById('connectionStatus');
 
-    function getBookedSlots() {
-        const stored = localStorage.getItem(STORAGE_KEY);
-        return stored ? JSON.parse(stored) : [];
+    const timeSlots = [];
+    for (let i = 8; i <= 22; i += 2) {
+        timeSlots.push(i.toString().padStart(2, '0') + ":00");
     }
 
-    function renderSlots() {
-        const bookedSlots = getBookedSlots();
+    const bookingsRef = ref(db, 'bookings/' + targetDate);
+    
+    onValue(bookingsRef, (snapshot) => {
+        const data = snapshot.val() || {}; 
+        statusText.textContent = "已連線至雲端系統";
+        renderSlots(data);
+    }, (error) => {
+        statusText.textContent = "連線失敗: " + error.message;
+        console.error(error);
+    });
+
+    function renderSlots(bookedData) {
         slotsContainer.innerHTML = ''; 
 
         timeSlots.forEach(time => {
             const btn = document.createElement('button');
             btn.className = 'time-btn';
             btn.textContent = time;
-            
-            if (bookedSlots.includes(time)) {
+
+            if (bookedData[time]) {
                 btn.disabled = true;
-                btn.title = "此時段已被預約";
+                btn.title = "已被其他學員預約";
             } else {
                 btn.onclick = () => handleBooking(time);
             }
@@ -223,35 +215,18 @@
         });
     }
 
-    function handleBooking(time) {
-        const bookedSlots = getBookedSlots();
-        bookedSlots.push(time);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(bookedSlots));
-        renderSlots();
-        showModal(time);
-    }
-
-    function showModal(time) {
-        const modal = document.getElementById('successModal');
-        const messageBox = document.getElementById('modalMessage');
-        messageBox.innerHTML = `謝謝您為病人努力學習<br><strong>${time}</strong> 等您上線`;
-        modal.style.display = 'flex';
-    }
-
-    function closeModal() {
-        document.getElementById('successModal').style.display = 'none';
-    }
-
-    function resetData() {
-        if(confirm('確定要清空所有預約紀錄嗎？')) {
-            localStorage.removeItem(STORAGE_KEY);
-            renderSlots();
-        }
-    }
-
-    const today = new Date();
-    document.getElementById('currentDate').textContent = `${today.getFullYear()}/${(today.getMonth()+1).toString().padStart(2,'0')}/${today.getDate().toString().padStart(2,'0')}`;
-    renderSlots();
+    window.handleBooking = function(time) {
+        set(ref(db, 'bookings/' + targetDate + '/' + time), true)
+            .then(() => {
+                const modal = document.getElementById('successModal');
+                const messageBox = document.getElementById('modalMessage');
+                messageBox.innerHTML = `謝謝您為病人努力學習<br><strong>${time}</strong> 等您上線`;
+                modal.style.display = 'flex';
+            })
+            .catch((error) => {
+                alert("預約失敗，請檢查網路或是資料庫權限\n" + error.message);
+            });
+    };
 </script>
 
 </body>
