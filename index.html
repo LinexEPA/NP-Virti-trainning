@@ -77,20 +77,29 @@
             cursor: pointer;
             transition: all 0.2s;
             font-weight: bold;
+            min-height: 60px; /* 增加高度以容納名字 */
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
         }
-        .time-btn:hover:not(:disabled) {
+        .time-btn:hover {
             background-color: #e6f0ff;
             transform: translateY(-2px);
             box-shadow: 0 2px 5px rgba(0,0,0,0.1);
         }
-        .time-btn:disabled {
-            background-color: var(--disabled-gray);
-            border-color: var(--disabled-gray);
-            color: #666;
-            cursor: not-allowed;
-            text-decoration: line-through;
+        
+        /* ★★★ 修改：已預約樣式 (紅色系，代表有人但可點擊取消) ★★★ */
+        .time-btn.booked {
+            background-color: #fff5f5;
+            border: 1px solid #ffcccc;
+            color: #d63031;
         }
-        /* 通用視窗樣式 */
+        .time-btn.booked:hover {
+            background-color: #ffe0e0;
+            box-shadow: 0 0 8px rgba(214, 48, 49, 0.2);
+        }
+
         .modal {
             display: none;
             position: fixed;
@@ -105,11 +114,11 @@
         }
         .modal-content {
             background-color: #fff;
-            padding: 30px;
+            padding: 25px;
             border-radius: 10px;
             text-align: center;
-            max-width: 80%;
-            width: 300px;
+            max-width: 85%;
+            width: 320px;
             box-shadow: 0 5px 15px rgba(0,0,0,0.3);
             border-top: 5px solid var(--primary-blue);
         }
@@ -117,11 +126,24 @@
             background-color: var(--primary-blue);
             color: white;
             border: none;
-            padding: 10px 25px;
+            padding: 10px 20px;
             border-radius: 5px;
             cursor: pointer;
             font-size: 1rem;
-            margin-top: 15px;
+            margin: 5px;
+        }
+        .modal-input {
+            width: 100%;
+            padding: 12px;
+            font-size: 1rem;
+            margin: 10px 0 20px 0;
+            border: 2px solid #ddd;
+            border-radius: 6px;
+            box-sizing: border-box;
+        }
+        .modal-input:focus {
+            border-color: var(--primary-blue);
+            outline: none;
         }
         .status-bar {
             text-align: center;
@@ -145,7 +167,7 @@
             <input type="date" id="datePicker" class="date-input">
         </div>
         <div style="margin-top: 10px; font-size: 0.9rem; color: #666;">
-            請點選上方日期以切換不同天的課表
+            點選「空位」預約，點選「已預約」可驗證取消
         </div>
     </div>
 
@@ -158,18 +180,17 @@
 
 <div class="modal" id="bookingModal">
     <div class="modal-content">
-        <h3 style="color: #0056b3; margin-top: 0;">預約確認</h3>
-        <p>您選擇的時段：<br><span id="bookingTimeDisplay" style="font-weight: bold; font-size: 1.5rem; color: #333;"></span></p>
+        <h3 style="color: #0056b3; margin-top: 0;">確認預約時段</h3>
+        <p>您選擇的時間：<br><span id="bookingTimeDisplay" style="font-weight: bold; color: #333; font-size: 1.2rem;"></span></p>
         
-        <div style="margin: 20px 0; text-align: left;">
-            <label for="studentNameInput" style="display: block; margin-bottom: 8px; font-weight: bold; color: #555;">請輸入您的學員姓名：</label>
-            <input type="text" id="studentNameInput" placeholder="例如：王小明" 
-                   style="width: 100%; padding: 10px; font-size: 1rem; border: 1px solid #ccc; border-radius: 5px; box-sizing: border-box;">
+        <div style="text-align: left;">
+            <label for="studentNameInput" style="font-weight: bold; color: #555;">請輸入您的姓名：</label>
+            <input type="text" id="studentNameInput" class="modal-input" placeholder="例如：陳小美">
         </div>
 
-        <div style="display: flex; gap: 10px; justify-content: center;">
-            <button class="modal-btn" style="background-color: #6c757d; margin-top: 0;" onclick="window.closeBookingModal()">取消</button>
-            <button class="modal-btn" style="margin-top: 0;" onclick="window.confirmBooking()">確認預約</button>
+        <div style="display: flex; justify-content: center;">
+            <button class="modal-btn" style="background-color: #6c757d;" onclick="window.closeBookingModal()">取消</button>
+            <button class="modal-btn" onclick="window.confirmBooking()">確認送出</button>
         </div>
     </div>
 </div>
@@ -180,7 +201,7 @@
             <i class="fas fa-check-circle"></i>
         </div>
         <div class="modal-text" id="modalMessage" style="font-size: 1.1rem; line-height: 1.6; color: #333;"></div>
-        <button class="modal-btn" onclick="document.getElementById('successModal').style.display='none'">確定</button>
+        <button class="modal-btn" onclick="document.getElementById('successModal').style.display='none'">關閉</button>
     </div>
 </div>
 
@@ -188,7 +209,6 @@
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
     import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 
-    // 使用你提供的 Firebase 設定
     const firebaseConfig = {
         apiKey: "AIzaSyDdoji343owSU3lufOUVMLPaAL5phmOoYE",
         authDomain: "np-virti-booking-platform.firebaseapp.com",
@@ -200,7 +220,6 @@
         measurementId: "G-5N4970Y5F4"
     };
 
-    // 初始化 Firebase
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
 
@@ -208,24 +227,80 @@
     const slotsContainer = document.getElementById('slotsContainer');
     const statusText = document.getElementById('connectionStatus');
     
-    // 產生 12 個時段 (00:00 到 22:00)
+    // ★★★ 自訂時段清單 (這裡你可以隨意修改想要開放的時間) ★★★
+    // 例如： ["09:00", "10:30", "14:00"]
     const timeSlots = [];
     for (let i = 0; i <= 22; i += 2) {
         timeSlots.push(i.toString().padStart(2, '0') + ":00");
     }
 
-    // 設定預設日期為今天
     const today = new Date().toISOString().split('T')[0];
     datePicker.value = today;
 
     let currentDateStr = today;
     let unsubscribe = null;
-    let currentSelectedTime = ''; // 暫存使用者選的時間
+    let currentSelectedTime = '';
 
-    // 啟動程式
+    window.openBookingModal = function(time) {
+        currentSelectedTime = time;
+        document.getElementById('bookingTimeDisplay').textContent = time;
+        document.getElementById('studentNameInput').value = '';
+        document.getElementById('bookingModal').style.display = 'flex';
+        setTimeout(() => document.getElementById('studentNameInput').focus(), 100);
+    };
+
+    window.closeBookingModal = function() {
+        document.getElementById('bookingModal').style.display = 'none';
+    };
+
+    window.confirmBooking = function() {
+        const nameInput = document.getElementById('studentNameInput');
+        const studentName = nameInput.value.trim();
+
+        if (!studentName) {
+            alert("請務必輸入姓名才能預約！");
+            return;
+        }
+
+        const bookingData = {
+            status: "booked",
+            name: studentName
+        };
+
+        set(ref(db, 'bookings/' + currentDateStr + '/' + currentSelectedTime), bookingData)
+            .then(() => {
+                window.closeBookingModal();
+                const successModal = document.getElementById('successModal');
+                const messageBox = document.getElementById('modalMessage');
+                messageBox.innerHTML = `預約成功！<br>學員：<strong>謝謝您為病人努力學習${studentName}</strong><br>時段：<strong>${currentSelectedTime}</strong>`;
+                successModal.style.display = 'flex';
+            })
+            .catch((error) => {
+                alert("預約失敗: " + error.message);
+            });
+    };
+
+    // ★★★ 新增：取消/更改預約的功能 ★★★
+    window.cancelBooking = function(time, correctName) {
+        const inputName = prompt(`此時段已被「${correctName}」預約。\n\n如需更改時間，請輸入原本的姓名來取消：`);
+
+        if (inputName === null) return;
+
+        if (inputName.trim() === correctName) {
+            set(ref(db, 'bookings/' + currentDateStr + '/' + time), null)
+                .then(() => {
+                    alert(`已取消 ${time} 的預約！\n您現在可以重新預約新的時段。`);
+                })
+                .catch((error) => {
+                    alert("取消失敗: " + error.message);
+                });
+        } else {
+            alert("姓名輸入錯誤，驗證失敗！");
+        }
+    };
+
     loadDataForDate(today);
 
-    // 監聽日期變更
     datePicker.addEventListener('change', (e) => {
         if(e.target.value) {
             loadDataForDate(e.target.value);
@@ -260,81 +335,34 @@
         timeSlots.forEach(time => {
             const btn = document.createElement('button');
             btn.className = 'time-btn';
-            btn.textContent = time;
+            
+            // 建立按鈕內容 (時間 + 名字)
+            let btnContent = `<span style="font-size: 1.1rem; font-weight: bold;">${time}</span>`;
 
             if (bookedData[time]) {
-                btn.disabled = true;
-                btn.title = "已被預約";
-                // 若要顯示是誰預約的，可以加上這行：
-                // btn.textContent += ` (${bookedData[time].name})`;
+                // 已預約狀態
+                btn.classList.add('booked'); 
+                // 顯示名字 (讓同學知道這是誰的，方便驗證取消)
+                btnContent += `<br><span style="font-size: 0.85rem; font-weight: normal;">${bookedData[time].name}</span>`;
+                btn.innerHTML = btnContent;
+                btn.title = "點擊以驗證並取消預約";
+                // 綁定取消事件
+                btn.onclick = () => window.cancelBooking(time, bookedData[time].name);
             } else {
-                // 綁定點擊事件，開啟輸入視窗
+                // 可預約狀態
+                btn.innerHTML = btnContent;
+                // 綁定預約事件
                 btn.onclick = () => window.openBookingModal(time);
             }
             slotsContainer.appendChild(btn);
         });
     }
-
-    // --- 以下為視窗控制與預約邏輯 ---
-
-    // 開啟預約視窗
-    window.openBookingModal = function(time) {
-        currentSelectedTime = time;
-        document.getElementById('bookingTimeDisplay').textContent = time;
-        document.getElementById('studentNameInput').value = ''; // 清空欄位
-        document.getElementById('bookingModal').style.display = 'flex';
-        // 自動將游標移到輸入框
-        setTimeout(() => document.getElementById('studentNameInput').focus(), 100);
-    };
-
-    // 關閉預約視窗
-    window.closeBookingModal = function() {
-        document.getElementById('bookingModal').style.display = 'none';
-    };
-
-    // 確認預約 (按下視窗裡的確認按鈕後執行)
-    window.confirmBooking = function() {
-        const nameInput = document.getElementById('studentNameInput');
-        const studentName = nameInput.value.trim();
-
-        if (!studentName) {
-            alert("請輸入姓名才能預約喔！");
-            return;
-        }
-
-        // 準備要寫入的資料
-        const bookingData = {
-            status: "booked",
-            name: studentName
-        };
-
-        // 寫入 Firebase
-        set(ref(db, 'bookings/' + currentDateStr + '/' + currentSelectedTime), bookingData)
-            .then(() => {
-                // 1. 關閉輸入視窗
-                window.closeBookingModal();
-                
-                // 2. 顯示成功視窗
-                const successModal = document.getElementById('successModal');
-                const messageBox = document.getElementById('modalMessage');
-                messageBox.innerHTML = `預約成功！<br>學員：<strong>${studentName}</strong><br><strong>${currentSelectedTime}</strong> 等您上線`;
-                successModal.style.display = 'flex';
-            })
-            .catch((error) => {
-                alert("預約失敗: " + error.message);
-            });
-    };
     
-    // 點擊視窗外部也可以關閉
     window.onclick = function(event) {
         const modal1 = document.getElementById('bookingModal');
         const modal2 = document.getElementById('successModal');
-        if (event.target == modal1) {
-            modal1.style.display = 'none';
-        }
-        if (event.target == modal2) {
-            modal2.style.display = 'none';
-        }
+        if (event.target == modal1) window.closeBookingModal();
+        if (event.target == modal2) modal2.style.display = 'none';
     }
 </script>
 
